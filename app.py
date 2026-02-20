@@ -12,7 +12,7 @@ GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
 # For ngrok: replace with YOUR current ngrok forwarding address (without https://)
 # Example: "a832-2401-4900-8910-8704-79b1-7bcf-443a-97c7.ngrok-free.app"
 # Keep this updated every time you restart ngrok (free tier gives random URL each time)
-ESP_HOST = st.secrets.get("ESP_HOST",  "https://c453-171-61-28-113.ngrok-free.app")
+ESP_HOST = st.secrets.get("ESP_HOST",  " https://4118-2401-4900-8910-8704-6c55-96eb-86df-9383.ngrok-free.app")
 
 if not GROQ_API_KEY or not GROQ_API_KEY.startswith("gsk_"):
     st.error("GROQ_API_KEY is missing or invalid → please add it in Streamlit Cloud → Settings → Secrets")
@@ -227,4 +227,5 @@ with tab_text:
 if "status" in st.session_state:
     st.markdown("---")
     st.subheader("Last action result")
+
     st.code(st.session_state.status)
