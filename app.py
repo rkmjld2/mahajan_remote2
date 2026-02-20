@@ -5,27 +5,31 @@ import io
 import wave
 
 # ────────────────────────────────────────────────
-# CONFIG - Use Streamlit secrets (recommended for cloud)
+# CONFIG
 # ────────────────────────────────────────────────
 GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
 
-# For ngrok: replace with YOUR current ngrok forwarding address (without https://)
-# Example: "a832-2401-4900-8910-8704-79b1-7bcf-443a-97c7.ngrok-free.app"
-# Keep this updated every time you restart ngrok (free tier gives random URL each time)
-ESP_HOST = st.secrets.get("ESP_HOST",  " https://4118-2401-4900-8910-8704-6c55-96eb-86df-9383.ngrok-free.app")
+# IMPORTANT: only the DOMAIN part – NO https:// or http://
+# Example correct values:
+#   "4118-2401-4900-8910-8704-6c55-96eb-86df-9383.ngrok-free.app"
+#   "c453-171-61-28-113.ngrok-free.app"
+ESP_HOST = st.secrets.get("ESP_HOST", "4118-2401-4900-8910-8704-6c55-96eb-86df-9383.ngrok-free.app")
 
 if not GROQ_API_KEY or not GROQ_API_KEY.startswith("gsk_"):
-    st.error("GROQ_API_KEY is missing or invalid → please add it in Streamlit Cloud → Settings → Secrets")
+    st.error("GROQ_API_KEY is missing or invalid → add it in Streamlit Cloud → Settings → Secrets")
     st.stop()
 
 if not ESP_HOST:
-    st.error("ESP_HOST (ngrok address) is missing → add it in secrets or directly in code")
+    st.error("ESP_HOST (ngrok domain) is missing → add it in secrets or directly in code")
     st.stop()
+
+# Debug – show what is actually being used (remove after testing)
+st.caption(f"Using ESP_HOST = {ESP_HOST!r}")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
 # ────────────────────────────────────────────────
-# BROWSER TTS (works remotely on client side!)
+# BROWSER TTS
 # ────────────────────────────────────────────────
 def speak_browser(text: str):
     if not text:
@@ -40,8 +44,6 @@ def speak_browser(text: str):
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
         window.speechSynthesis.speak(utterance);
-    }} else {{
-        console.log("SpeechSynthesis not supported");
     }}
     </script>
     """
@@ -51,39 +53,39 @@ def speak_browser(text: str):
 # HELPERS
 # ────────────────────────────────────────────────
 def send_command(path: str) -> tuple[bool, str]:
-    # Use HTTPS + ngrok domain
+    # Build clean URL – always https + domain + path
     full_url = f"https://{ESP_HOST}{path}"
     try:
-        # verify=False is needed for free ngrok (self-signed certificate)
+        # verify=False because free ngrok uses self-signed certificate
         r = requests.get(full_url, timeout=10, verify=False)
         if r.status_code == 200:
             return True, r.text.strip()
-        return False, f"HTTP {r.status_code}"
+        return False, f"HTTP {r.status_code} – {r.text.strip()}"
     except Exception as e:
-        return False, f"Error: {str(e)}"
+        return False, f"Connection failed: {str(e)}"
 
-# Simple command parser using Groq LLM
+# Groq command parser
 def parse_command_with_groq(user_text: str) -> tuple[str | None, str]:
     prompt = f"""You are a home automation assistant controlling D1 and D2 on an ESP8266.
 ESP base URL: https://{ESP_HOST}
 
 User command: "{user_text}"
 
-Respond ONLY in this exact format (two lines):
+Respond ONLY with exactly two lines:
 
-ACTION: <full https url like https://....ngrok-free.app/d1/on or NONE>
-SPEAK: <short sentence to say back, e.g. D1 is now on>
+ACTION: <full URL like https://{ESP_HOST}/d1/on or NONE>
+SPEAK: <short sentence to speak back>
 
 Examples:
-User: turn on d1 → ACTION: https://{ESP_HOST}/d1/on   SPEAK: D1 is now on
-User: switch off D2 please → ACTION: https://{ESP_HOST}/d2/off   SPEAK: D2 is now off
-User: status → ACTION: NONE   SPEAK: Use the buttons to check status
+User: turn on d1     → ACTION: https://{ESP_HOST}/d1/on   SPEAK: D1 is now on
+User: switch off D2  → ACTION: https://{ESP_HOST}/d2/off  SPEAK: D2 is now off
+User: status         → ACTION: NONE                        SPEAK: Use the buttons to check status
 
 Now decide:"""
 
     try:
         resp = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",  # fast & cheap
+            model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=100
@@ -111,21 +113,21 @@ Now decide:"""
 # ────────────────────────────────────────────────
 # UI
 # ────────────────────────────────────────────────
-st.set_page_config(page_title="ESP8266 D1/D2 Control (ngrok)", layout="wide")
+st.set_page_config(page_title="ESP8266 Control (ngrok)", layout="wide")
 
 st.title("ESP8266 D1 / D2 Remote Control")
 st.caption(f"Target: https://{ESP_HOST}   |   via ngrok tunnel")
 
-if st.button("Refresh / Check connection", help="Test if ESP is reachable via ngrok"):
+if st.button("Refresh / Check connection", help="Test if ESP is reachable"):
     ok, msg = send_command("/")
     if ok:
-        st.success("ESP responds → connection looks good")
+        st.success("ESP responds → connection OK")
     else:
-        st.error(f"Cannot reach ESP → {msg}\n\nMake sure:\n1. ngrok is still running\n2. ESP is powered on\n3. ngrok URL matches ESP_HOST")
+        st.error(f"Cannot reach ESP → {msg}\n\nChecklist:\n1. ngrok still running?\n2. ESP powered on?\n3. ESP_HOST matches current ngrok domain?")
 
 st.markdown("---")
 
-st.subheader("Manual Buttons (works from anywhere if ngrok is active)")
+st.subheader("Manual Buttons")
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -137,7 +139,7 @@ with col1:
 
 with col2:
     if st.button("D1 OFF", use_container_width=True):
-        ok, msg = send_command("/d2/off")
+        ok, msg = send_command("/d1/off")
         st.session_state.status = msg if ok else f"Error: {msg}"
         speak_browser(msg if ok else "Failed to turn D1 off")
 
@@ -155,26 +157,16 @@ with col4:
 
 st.markdown("---")
 
-st.subheader("Voice / Text Command (voice is experimental on cloud)")
+st.subheader("Voice / Text Command")
 
-st.info("""
-**Important notes:**
-• Voice input via microphone often **does not work** reliably on Streamlit Cloud.
-• Buttons + text input are the most dependable ways.
-• ngrok tunnel must stay active on your computer (terminal open).
-• Free ngrok URL changes every time you restart ngrok.
-""")
+st.info("Voice input is unreliable on Streamlit Cloud. Use text or buttons as main control.")
 
-tab_voice, tab_text = st.tabs(["🎤 Voice", "⌨️ Text fallback"])
+tab_voice, tab_text = st.tabs(["🎤 Voice", "⌨️ Text"])
 
 with tab_voice:
-    audio_data = st.audio_input(
-        "Speak your command (e.g. turn on D1, switch off D2)",
-        sample_rate=16000
-    )
-
+    audio_data = st.audio_input("Speak command (e.g. turn on D1)", sample_rate=16000)
     if audio_data:
-        with st.spinner("Transcribing with Groq Whisper..."):
+        with st.spinner("Transcribing..."):
             try:
                 wav_buffer = io.BytesIO()
                 with wave.open(wav_buffer, 'wb') as wav:
@@ -196,24 +188,23 @@ with tab_voice:
                 if transcription:
                     action_url, speak_text = parse_command_with_groq(transcription)
                     if action_url:
-                        ok, msg = send_command(action_url.replace(f"https://{ESP_HOST}", ""))  # remove base if included
+                        path = action_url.replace(f"https://{ESP_HOST}", "")
+                        ok, msg = send_command(path)
                         result = msg if ok else f"Failed: {msg}"
                         st.success(result)
                         speak_browser(speak_text or result)
                     else:
                         st.warning(speak_text)
                         speak_browser(speak_text)
-
             except Exception as e:
-                st.error(f"Voice processing failed: {str(e)}")
-                speak_browser("Sorry, voice processing failed.")
+                st.error(f"Voice failed: {str(e)}")
+                speak_browser("Voice processing error.")
 
 with tab_text:
-    text_cmd = st.text_input("Type command here (e.g. turn d1 on)", key="text_input")
-    if st.button("Send text command") and text_cmd.strip():
+    text_cmd = st.text_input("Type command (e.g. turn d1 on)", key="text_input")
+    if st.button("Send") and text_cmd.strip():
         action_url, speak_text = parse_command_with_groq(text_cmd.strip())
         if action_url:
-            # Clean path if full URL was returned
             path = action_url.replace(f"https://{ESP_HOST}", "")
             ok, msg = send_command(path)
             result = msg if ok else f"Failed: {msg}"
@@ -223,9 +214,8 @@ with tab_text:
             st.warning(speak_text)
             speak_browser(speak_text)
 
-# Status area
+# Status
 if "status" in st.session_state:
     st.markdown("---")
-    st.subheader("Last action result")
-
+    st.subheader("Last result")
     st.code(st.session_state.status)
