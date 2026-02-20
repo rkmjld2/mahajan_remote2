@@ -13,7 +13,7 @@ GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
 # Example correct values:
 #   "4118-2401-4900-8910-8704-6c55-96eb-86df-9383.ngrok-free.app"
 #   "c453-171-61-28-113.ngrok-free.app"
-ESP_HOST = st.secrets.get("ESP_HOST", "0980-2401-4900-8910-8704-6c55-96eb-86df-9383.ngrok-free.app")
+ESP_HOST = st.secrets.get("ESP_HOST", "f50a-2401-4900-8910-8704-6c55-96eb-86df-9383.ngrok-free.app")
 
 if not GROQ_API_KEY or not GROQ_API_KEY.startswith("gsk_"):
     st.error("GROQ_API_KEY is missing or invalid → add it in Streamlit Cloud → Settings → Secrets")
@@ -219,3 +219,4 @@ if "status" in st.session_state:
     st.markdown("---")
     st.subheader("Last result")
     st.code(st.session_state.status)
+
